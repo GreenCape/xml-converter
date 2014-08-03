@@ -17,7 +17,7 @@ about speed.
 
 ## Requirements
 
-PHP 5.3.3+
+PHP 5.4+
 
 ## Installation
 
