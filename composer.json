@@ -1,0 +1,30 @@
+{
+    "name": "greencape/xml-converter",
+    "description": "A PHP XML parser and compiler that provides an easy way to convert XML into native PHP arrays and back again. No dependencies on external libraries or extensions.",
+    "homepage": "https://github.com/greencape/xml-converter",
+    "license": "GPL 2",
+    "authors": [
+        {
+            "name": "Niels Braczek",
+            "email": "nbraczek@bsds.de",
+            "role": "lead"
+        },
+        {
+            "name": "Marat A. Denenberg"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/greencape/xml-converter/issues"
+    },
+    "require": {
+        "php": ">=5.3.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4"
+    },
+    "autoload": {
+        "classmap": [
+            "src"
+        ]
+    }
+}
