@@ -1,20 +1,26 @@
 <?php
 /**
  * GreenCape XML Converter
+ *
  * Copyright (c) 2014, Niels Braczek <nbraczek@bsds.de>.
  * All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
+ *
  *   * Redistributions of source code must retain the above copyright
  *     notice, this list of conditions and the following disclaimer.
+ *
  *   * Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in
  *     the documentation and/or other materials provided with the
  *     distribution.
+ *
  *   * Neither the name of GreenCape or Niels Braczek nor the names of his
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -28,17 +34,25 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * @package         GreenCape\Xml
- * @author          Niels Braczek <nbraczek@bsds.de>
- * @author          Marat A. Denenberg
+ * @package     GreenCape\Xml
+ * @author      Niels Braczek <nbraczek@bsds.de>
+ * @author      Marat A. Denenberg
  * @copyright   (C) 2014 GreenCape, Niels Braczek <nbraczek@bsds.de>
- * @license         http://opensource.org/licenses/GPL-2.0 GNU General Public License, version 2.0 (GPLv2)
- * @link            http://www.greencape.com/
- * @since           File available since Release 0.1.0
+ * @license     http://opensource.org/licenses/GPL-2.0 GNU General Public License, version 2.0 (GPLv2)
+ * @link        http://www.greencape.com/
+ * @since       File available since Release 1.0.0
  */
 
 namespace GreenCape\Xml;
 
+/**
+ * XML Converter Class
+ *
+ * @package GreenCape\Xml
+ * @author  Niels Braczek <nbraczek@bsds.de>
+ * @author  Marat A. Denenberg
+ * @since   Class available since Release 1.0.0
+ */
 class Converter implements \Iterator, \ArrayAccess
 {
 	public $xml = '';
@@ -47,16 +61,10 @@ class Converter implements \Iterator, \ArrayAccess
 
 	private $stack = array();
 	private $declaration = '';
-	private $index = 0;
-	private $line = 0;
-	private $tag_name = '';
 	private $tag_value = '';
-	private $attribute_name = '';
-	private $attribute_value = '';
-	private $attributes = array();
 	private $comment = array();
 	private $comment_index = 0;
-	private $syntax = 'syntax_tag_value';
+	private $doctype = '';
 
 	public function __construct($data = array())
 	{
@@ -66,7 +74,7 @@ class Converter implements \Iterator, \ArrayAccess
 				$this->xml = ($this->isFile($data) ? file_get_contents($data) : $data);
 				if (!empty($this->xml) && $this->xml[0] == '<')
 				{
-					$this->parse();
+					@$this->parse();
 				}
 				break;
 
@@ -89,7 +97,7 @@ class Converter implements \Iterator, \ArrayAccess
 
 		if (!empty($node['#comment']))
 		{
-			foreach ($node['#comment'] as $comment_index => $comment)
+			foreach ($node['#comment'] as $comment)
 			{
 				$comment = "{$indent}<!-- {$comment} -->";
 				$comment = $this->applyIndentation($comment, $indent);
@@ -105,16 +113,16 @@ class Converter implements \Iterator, \ArrayAccess
 				{
 					continue;
 				}
-				$attributes .= ' ' . substr($key, 1) . '="' . $value . '"';
+				$attributes .= ' ' . substr($key, 1);
+				if (!is_bool($value))
+				{
+					$attributes .= '="' . $value . '"';
+				}
 				unset($node[$key]);
 			}
 		}
 		foreach ($node as $tag => $data)
 		{
-			if (empty($data))
-			{
-				$data = null;
-			}
 			switch (gettype($data))
 			{
 				case 'array':
@@ -153,91 +161,167 @@ class Converter implements \Iterator, \ArrayAccess
 
 	private function parse()
 	{
-		$this->xml = str_replace("\t", ' ', $this->xml);
-
 		$this->stack[] =& $this->data;
+		$stream = new Stream(trim($this->xml));
 
-		for ($length = strlen($this->xml); $this->index < $length; $this->index++)
+		while (!$stream->isEmpty())
 		{
-			if ($this->syntax == 'syntax_comment')
+			if ($stream->matches('<?'))
 			{
-				if ($this->xml[$this->index] == "\n")
-				{
-					$this->line++;
-				}
-				$this->{$this->syntax}();
-				continue;
+				$this->handleDeclaration($stream);
 			}
-
-			switch ($this->xml[$this->index])
+			elseif ($stream->matches('<!--'))
 			{
-				case '<':
-					switch ($this->xml[$this->index + 1])
-					{
-						case '?':
-							$this->index += 2;
-							$this->syntax = 'syntax_declaration';
-							break;
-
-						case '/':
-							$this->index += 2;
-							$this->tag_name = '';
-							$this->syntax   = 'syntax_tag_back_start';
-							break;
-
-						case '!':
-							$this->index += 4;
-							$this->syntax  = 'syntax_comment';
-							break;
-
-						default:
-							$this->index += 1;
-							$this->tag_name   = $this->tag_value = '';
-							$this->attributes = array();
-							$this->syntax     = 'syntax_tag_front_start';
-							break;
-					}
-					break;
-
-				case '/':
-					switch ($this->xml[$this->index + 1])
-					{
-						case '>':
-							$this->index += 1;
-							$this->syntax = 'syntax_tag_front_end';
-							break;
-					}
-					break;
-
-				case '>':
-					switch ($this->syntax)
-					{
-						case 'syntax_tag_front_start':
-						case 'syntax_attribute_name':
-							$this->syntax = 'syntax_tag_front_end';
-							break;
-
-						case 'syntax_comment':
-							break;
-
-						default:
-							$this->xml    = substr($this->xml, $this->index);
-							$this->index  = 0;
-							$length       = strlen($this->xml);
-							$this->syntax = 'syntax_tag_back_end';
-							break;
-					}
-					break;
-
-				case "\n":
-					$this->line++;
-					break;
+				$this->handleComment($stream);
 			}
-
-			$this->{$this->syntax}();
+			elseif ($stream->matches('<!doctype', 'i'))
+			{
+				$this->handleDoctype($stream);
+			}
+			elseif ($stream->matches('</'))
+			{
+				$this->handleElementClose($stream);
+			}
+			elseif ($stream->matches('<'))
+			{
+				$this->handleElementOpen($stream);
+			}
+			else
+			{
+				$this->tag_value = $stream->readTo('<');
+			}
 		}
 
 		unset($this->xml);
+	}
+
+	private function handleDeclaration(Stream $stream)
+	{
+		// Skip '<?'
+		$stream->next(2);
+		$this->declaration = $stream->readTo('?');
+
+		// Skip '?' . '>'
+		$stream->next(2);
+	}
+
+	private function handleDoctype(Stream $stream)
+	{
+		// Skip '<!doctype'
+		$stream->next(9);
+		$this->doctype = $stream->readTo('>');
+
+		// Skip '>'
+		$stream->next();
+	}
+
+	private function handleComment(Stream $stream)
+	{
+		// Skip '<!--'
+		$stream->next(4);
+		$comment = '';
+		do
+		{
+			$comment .= $stream->next();
+		}
+		while (!$stream->matches('-->'));
+		$this->comment[$this->comment_index++] = trim($comment);
+
+		// Skip '-->'
+		$stream->next(3);
+	}
+
+	private function handleElementOpen(Stream $stream)
+	{
+		// Skip '<'
+		$stream->next();
+		$element = $stream->readTo('>');
+
+		// Skip '>'
+		$stream->next();
+
+		$isEmpty = false;
+		if (substr($element, -1) == '/')
+		{
+			$isEmpty = true;
+			$element = substr($element, 0, -1);
+		}
+
+		$tmp = preg_split('~\s+~', $element, 2);
+		$tag_name = array_shift($tmp);
+
+		$node            = array();
+		$node[$tag_name] = array();
+		if (!empty($this->comment))
+		{
+			$node["#comment"]    = $this->comment;
+			$this->comment       = array();
+			$this->comment_index = 0;
+		}
+		if (!empty($tmp))
+		{
+			preg_match_all('~\s*([^= ]+)(?:=(["\']?)(.*?)\2)?~sm', $tmp[0], $matches, PREG_SET_ORDER);
+			foreach ($matches as $match)
+			{
+				$node["@{$match[1]}"] = count($match) > 2 ? $match[3] : true;
+			}
+		}
+
+		$current =& $this->stack[count($this->stack) - 1];
+		if (empty($current))
+		{
+			$current       = $node;
+			$this->stack[] =& $current[$tag_name];
+		}
+		else
+		{
+			if ($this->is_assoc($current))
+			{
+				$current = array($current, $node);
+			}
+			else
+			{
+				$current[] = $node;
+			}
+			$this->stack[] =& $current[count($current) - 1][$tag_name];
+		}
+
+		if ($isEmpty)
+		{
+			$this->closeElement($stream, $tag_name);
+		}
+	}
+
+	private function handleElementClose(Stream $stream)
+	{
+		// Skip '</'
+		$stream->next(2);
+		$element = $stream->readTo('>');
+
+		// Skip '>'
+		$stream->next();
+		$this->closeElement($stream, $element);
+	}
+
+	private function closeElement(Stream $stream, $tag_name)
+	{
+		$child =& $this->stack[count($this->stack) - 1];
+		array_pop($this->stack);
+
+		$last = count($this->stack) - 1;
+		if (isset($this->stack[$last][$tag_name]) || isset(end($this->stack[$last])[$tag_name]))
+		{
+			if (empty($child))
+			{
+				$this->tag_value = trim($this->tag_value);
+				$child           = strlen($this->tag_value) > 0 ? $this->tag_value : null;
+			}
+			$this->tag_value = '';
+		}
+		else
+		{
+			$this->syntax_error($stream);
+		}
 	}
 
 	// ### Iterator: foreach access ###
@@ -308,163 +392,9 @@ class Converter implements \Iterator, \ArrayAccess
 		return preg_match('#encoding\="(.*)"#U', $this->declaration, $match) ? $match[1] : 'utf-8';
 	}
 
-	private function syntax_declaration()
+	private function syntax_error(Stream $stream)
 	{
-		if ($this->xml[$this->index] == '?' && $this->xml[$this->index + 1] == '>')
-		{
-			$this->index++;
-			$this->syntax = 'syntax_tag_value';
-		}
-		else
-		{
-			$this->declaration .= $this->xml[$this->index];
-		}
-	}
-
-	private function syntax_error()
-	{
-		error_log("Syntax error in XML data. Please check line # {$this->line}.");
-	}
-
-	private function syntax_tag_front_start()
-	{
-		switch ($this->xml[$this->index])
-		{
-			case ' ':
-				$this->syntax         = 'syntax_attribute_name';
-				$this->attribute_name = $this->attribute_value = '';
-				break;
-
-			default:
-				$this->tag_name .= $this->xml[$this->index];
-				break;
-		}
-	}
-
-	private function syntax_tag_front_end()
-	{
-		$node                  = array();
-		$node[$this->tag_name] = array();
-		if (!empty($this->comment))
-		{
-			$node["#comment"] = $this->comment;
-			$this->comment = array();
-			$this->comment_index = 0;
-		}
-		if (!empty($this->attributes))
-		{
-			foreach ($this->attributes as $key => $value)
-			{
-				$node["@{$key}"] = $value;
-			}
-		}
-
-		$current =& $this->stack[count($this->stack) - 1];
-		if (empty($current))
-		{
-			$current       = $node;
-			$this->stack[] =& $current[$this->tag_name];
-		}
-		else
-		{
-			if ($this->is_assoc($current))
-			{
-				$current = array($current, $node);
-			}
-			else
-			{
-				$current[] = $node;
-			}
-			$this->stack[] =& $current[count($current) - 1][$this->tag_name];
-		}
-
-		$this->syntax = 'syntax_tag_value';
-	}
-
-	private function syntax_tag_back_start()
-	{
-		$this->tag_name .= $this->xml[$this->index];
-	}
-
-	private function syntax_tag_back_end()
-	{
-		$child =& $this->stack[count($this->stack) - 1];
-		array_pop($this->stack);
-
-		$last = count($this->stack) - 1;
-		if (isset($this->stack[$last][$this->tag_name]) || isset(end($this->stack[$last])[$this->tag_name]))
-		{
-			if (empty($child))
-			{
-				$this->tag_value = trim($this->tag_value);
-				$child = !empty($this->tag_value) ? $this->tag_value : null;
-			}
-			$this->tag_value = '';
-			$this->syntax    = 'syntax_tag_value';
-		}
-		else
-		{
-			$this->syntax_error();
-		}
-	}
-
-	private function syntax_tag_value()
-	{
-		$this->tag_value .= $this->xml[$this->index];
-	}
-
-	private function syntax_attribute_name()
-	{
-		switch ($this->xml[$this->index])
-		{
-			case '=':
-			case ' ':
-				break;
-
-			case '"':
-				$this->syntax = 'syntax_attribute_value';
-				break;
-
-			default:
-				$this->attribute_name .= $this->xml[$this->index];
-				break;
-		}
-	}
-
-	private function syntax_attribute_value()
-	{
-		switch ($this->xml[$this->index])
-		{
-			case '"':
-				$this->syntax = 'syntax_attribute_end';
-				$this->index--;
-				break;
-
-			default:
-				$this->attribute_value .= $this->xml[$this->index];
-				break;
-		}
-	}
-
-	private function syntax_attribute_end()
-	{
-		$this->attributes[$this->attribute_name] = $this->attribute_value;
-		$this->syntax                            = 'syntax_tag_front_start';
-	}
-
-	private function syntax_comment()
-	{
-		if ($this->xml[$this->index] == '-' && $this->xml[$this->index + 1] == '-')
-		{
-			$this->index += 2;
-			$this->comment[$this->comment_index] = trim($this->comment[$this->comment_index]);
-			$this->comment_index++;
-			$this->syntax = 'syntax_tag_value';
-		}
-		else
-		{
-			@$this->comment[$this->comment_index] .= $this->xml[$this->index];
-		}
+		error_log("Syntax error in XML data. Please check line # {$stream->line()}.");
 	}
 
 	/**
@@ -480,12 +410,11 @@ class Converter implements \Iterator, \ArrayAccess
 	/**
 	 * @param $text
 	 * @param $indent
-
 	 *
-*@return mixed
+	 * @return mixed
 	 */
 	private function applyIndentation($text, $indent)
 	{
 		return preg_replace('~\s*\n\s*~', "\n{$indent}", $text);
-}
+	}
 }

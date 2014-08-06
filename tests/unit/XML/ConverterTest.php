@@ -79,6 +79,13 @@ class ConverterTest extends PHPUnit_Framework_TestCase
 	{
 	}
 
+	public function testXmlFileToPhpArray()
+	{
+		$xml = new \GreenCape\Xml\Converter($this->xmlFile);
+
+		$this->assertEquals($this->phpArray, $xml->data);
+	}
+
 	public function provideXmlStrings()
 	{
 		return array(
@@ -93,6 +100,18 @@ class ConverterTest extends PHPUnit_Framework_TestCase
 			'empty element' => array(
 				'xml' => '<?xml version="1.0"?><root><node foo="bar"></node></root>',
 				'php' => array('root' => array('node' => '', '@foo' => 'bar'))
+			),
+			'zero' => array(
+				'xml' => '<?xml version="1.0"?><root><node>0</node></root>',
+				'php' => array('root' => array('node' => '0'))
+			),
+			'null' => array(
+				'xml' => '<?xml version="1.0"?><root><node /></root>',
+				'php' => array('root' => array('node' => null))
+			),
+			'tabs' => array(
+				'xml' => '<?xml version="1.0"?><root><node	foo="bar">foobar</node></root>',
+				'php' => array('root' => array('node' => 'foobar', '@foo' => 'bar'))
 			),
 		);
 	}
@@ -109,17 +128,37 @@ class ConverterTest extends PHPUnit_Framework_TestCase
 		$this->assertEquals($phpArray, $xml->data);
 	}
 
-	public function testXmlFileToPhpArray()
+	/**
+	 * @dataProvider provideXmlStrings
+	 * @param $xmlString
+	 * @param $phpArray
+	 */
+	public function testPhpArrayToXmlString($xmlString, $phpArray)
 	{
-		$xml = new \GreenCape\Xml\Converter($this->xmlFile);
+		$xml = new \GreenCape\Xml\Converter($phpArray);
 
-		$this->assertEquals($this->phpArray, $xml->data);
+		$this->assertXmlStringEqualsXmlString($xmlString, (string) $xml);
 	}
 
-	public function testPhpArrayToXmlString()
+	public function provideManifests()
 	{
-		$xml = new \GreenCape\Xml\Converter($this->phpArray);
+		return array(
+			'component' => array(__DIR__ . '/../../data/com_alpha.xml'),
+			'module'    => array(__DIR__ . '/../../data/mod_alpha.xml'),
+			'plugin'    => array(__DIR__ . '/../../data/plg_system_alpha.xml'),
+			'template'  => array(__DIR__ . '/../../data/templateDetails.xml'),
+			'language'  => array(__DIR__ . '/../../data/xx-XX.xml'),
+		);
+	}
 
-		$this->assertXmlStringEqualsXmlString(file_get_contents($this->xmlFile), $xml);
+	/**
+	 * @dataProvider provideManifests
+	 * @param string $file
+	 */
+	public function testManifest($file)
+	{
+		$xml = new \GreenCape\Xml\Converter($file);
+
+		$this->assertXmlStringEqualsXmlFile($file, (string) $xml);
 	}
 }
