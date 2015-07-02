@@ -64,7 +64,6 @@ class Converter implements \Iterator, \ArrayAccess
 	private $tag_value = '';
 	private $comment = array();
 	private $comment_index = 0;
-	private $doctype = '';
 
 	public function __construct($data = array())
 	{
@@ -209,7 +208,7 @@ class Converter implements \Iterator, \ArrayAccess
 	{
 		// Skip '<!doctype'
 		$stream->next(9);
-		$this->doctype = $stream->readTo('>');
+		$stream->readTo('>');
 
 		// Skip '>'
 		$stream->next();
