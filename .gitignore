@@ -1,9 +1,6 @@
 build/phar
 build/*.phar
 build/*.tgz
-.directory
-.idea
 cache.properties
 composer.phar
-composer.lock
 vendor

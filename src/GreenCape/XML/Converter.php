@@ -74,7 +74,7 @@ class Converter implements \Iterator, \ArrayAccess
 				$this->xml = ($this->isFile($data) ? file_get_contents($data) : $data);
 				if (!empty($this->xml) && $this->xml[0] == '<')
 				{
-					@$this->parse();
+					$this->parse();
 				}
 				break;
 
@@ -127,7 +127,7 @@ class Converter implements \Iterator, \ArrayAccess
 			{
 				case 'array':
 					$xml .= "{$indent}<{$tag}{$attributes}>\n";
-					if ($this->is_assoc($data))
+					if ($this->isAssoc($data))
 					{
 						$xml .= $this->traverse($data, $level + 1);
 					}
@@ -154,7 +154,7 @@ class Converter implements \Iterator, \ArrayAccess
 		return $xml;
 	}
 
-	private function is_assoc($array)
+	private function isAssoc($array)
 	{
 		return count(array_filter(array_keys($array), 'is_string')) > 0;
 	}
@@ -275,7 +275,7 @@ class Converter implements \Iterator, \ArrayAccess
 		}
 		else
 		{
-			if ($this->is_assoc($current))
+			if ($this->isAssoc($current))
 			{
 				$current = array($current, $node);
 			}
@@ -320,7 +320,7 @@ class Converter implements \Iterator, \ArrayAccess
 		}
 		else
 		{
-			$this->syntax_error($stream);
+			throw new \ErrorException("Syntax error in XML data. Please check line # {$stream->line()}.");
 		}
 	}
 
@@ -390,11 +390,6 @@ class Converter implements \Iterator, \ArrayAccess
 	public function encoding()
 	{
 		return preg_match('#encoding\="(.*)"#U', $this->declaration, $match) ? $match[1] : 'utf-8';
-	}
-
-	private function syntax_error(Stream $stream)
-	{
-		error_log("Syntax error in XML data. Please check line # {$stream->line()}.");
 	}
 
 	/**

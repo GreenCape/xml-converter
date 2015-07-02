@@ -1,7 +1,9 @@
+# PHP XML Converter
+
 [![Latest Stable Version](https://poser.pugx.org/greencape/xml-converter/v/stable.png)](https://packagist.org/packages/greencape/xml-converter)
 [![Build Status](https://api.travis-ci.org/GreenCape/xml-converter.svg?branch=master)](https://travis-ci.org/greencape/xml-converter)
-
-# PHP XML Converter
+[![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/GreenCape/xml-converter.svg)](http://isitmaintained.com/project/GreenCape/xml-converter "Average time to resolve an issue")
+[![Percentage of issues still open](http://isitmaintained.com/badge/open/GreenCape/xml-converter.svg)](http://isitmaintained.com/project/GreenCape/xml-converter "Percentage of issues still open")
 
 A PHP XML parser class that provides an easy way to convert XML into native PHP
 arrays and back again. It has no dependencies on any external libraries or
