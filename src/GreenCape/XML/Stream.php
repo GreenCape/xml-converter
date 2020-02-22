@@ -20,12 +20,12 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * @package     GreenCape\Xml
- * @author      Niels Braczek <nbraczek@bsds.de>
+ * @package         GreenCape\Xml
+ * @author          Niels Braczek <nbraczek@bsds.de>
  * @copyright   (C) 2012-2015 GreenCape, Niels Braczek <nbraczek@bsds.de>
- * @license     http://opensource.org/licenses/MIT The MIT license (MIT)
- * @link        http://greencape.github.io
- * @since       File available since Release 1.1.0
+ * @license         http://opensource.org/licenses/MIT The MIT license (MIT)
+ * @link            http://greencape.github.io
+ * @since           File available since Release 1.1.0
  */
 
 namespace GreenCape\Xml;
@@ -39,71 +39,107 @@ namespace GreenCape\Xml;
  */
 class Stream
 {
-	private $data = null;
-	private $line = 1;
+    /** @var string  */
+    private $data;
 
-	public function __construct($data)
-	{
-		$this->data = $data;
-	}
+    /** @var int  */
+    private $line = 1;
 
-	public function matches($string, $modifier = '')
-	{
-		$stream = substr($this->data, 0, strlen($string));
-		if (strpos($modifier, 'i') !== false)
-		{
-			$stream = strtolower($stream);
-			$string = strtolower($string);
-		}
-		return $stream == $string;
-	}
+    /**
+     * Stream constructor.
+     *
+     * @param string $data
+     */
+    public function __construct($data)
+    {
+        $this->data = $data;
+    }
 
-	public function current()
-	{
-		return $this->data[0];
-	}
+    /**
+     * @param        $string
+     * @param string $modifier
+     *
+     * @return bool
+     */
+    public function matches($string, $modifier = '')
+    {
+        $stream = substr($this->data, 0, strlen($string));
 
-	public function next($length = 1)
-	{
-		$c = substr($this->data, 0, $length);
-		$this->data = substr($this->data, $length);
+        if (strpos($modifier, 'i') !== false) {
+            $stream = strtolower($stream);
+            $string = strtolower($string);
+        }
 
-		for ($i = 0; $i < strlen($c); ++$i)
-		{
-			if ($c[$i] == "\n")
-			{
-				$this->line++;
-			}
-		}
-		return $c;
-	}
+        return $stream === $string;
+    }
 
-	public function flush()
-	{
-		$r = $this->data;
-		$this->data = null;
+    /**
+     * @return string
+     */
+    public function flush()
+    {
+        $r          = $this->data;
+        $this->data = null;
 
-		return $r;
-	}
+        return $r;
+    }
 
-	public function isEmpty()
-	{
-		return empty($this->data);
-	}
+    /**
+     * @return bool
+     */
+    public function isEmpty()
+    {
+        return empty($this->data);
+    }
 
-	public function line()
-	{
-		return $this->line;
-	}
+    /**
+     * @return int
+     */
+    public function line()
+    {
+        return $this->line;
+    }
 
-	public function readTo($char)
-	{
-		$result = '';
-		while ($this->current() != $char)
-		{
-			$result .= $this->next();
-		}
+    /**
+     * @param $char
+     *
+     * @return string
+     */
+    public function readTo($char)
+    {
+        $result = '';
 
-		return $result;
-	}
+        while ($this->current() != $char) {
+            $result .= $this->next();
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function current()
+    {
+        return $this->data[0];
+    }
+
+    /**
+     * @param int $length
+     *
+     * @return false|string
+     */
+    public function next($length = 1)
+    {
+        $c          = substr($this->data, 0, $length);
+        $this->data = substr($this->data, $length);
+
+        for ($i = 0, $iMax = strlen($c); $i < $iMax; ++$i) {
+            if ($c[$i] === "\n") {
+                $this->line++;
+            }
+        }
+
+        return $c;
+    }
 }

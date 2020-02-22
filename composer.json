@@ -17,10 +17,10 @@
         "issues": "https://github.com/GreenCape/xml-converter/issues"
     },
     "require": {
-        "php": ">=5.4"
+        "php": ">=7.2"
     },
     "require-dev": {
-        "phpunit/phpunit": "~4",
+        "phpunit/phpunit": "*",
         "codeclimate/php-test-reporter": "dev-master"
     },
     "autoload": {

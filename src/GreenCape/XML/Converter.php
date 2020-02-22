@@ -20,13 +20,13 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * @package     GreenCape\Xml
- * @author      Niels Braczek <nbraczek@bsds.de>
- * @author      Marat A. Denenberg
+ * @package         GreenCape\Xml
+ * @author          Niels Braczek <nbraczek@bsds.de>
+ * @author          Marat A. Denenberg
  * @copyright   (C) 2014-2015 GreenCape, Niels Braczek <nbraczek@bsds.de>
- * @license     http://opensource.org/licenses/MIT The MIT license (MIT)
- * @link        http://greencape.github.io
- * @since       File available since Release 1.0.0
+ * @license         http://opensource.org/licenses/MIT The MIT license (MIT)
+ * @link            http://greencape.github.io
+ * @since           File available since Release 1.0.0
  */
 
 namespace GreenCape\Xml;
@@ -41,360 +41,419 @@ namespace GreenCape\Xml;
  */
 class Converter implements \Iterator, \ArrayAccess
 {
-	public $xml = '';
+    public $xml = '';
 
-	public $data = array();
+    public $data = [];
 
-	private $stack = array();
-	private $declaration = '';
-	private $tag_value = '';
-	private $comment = array();
-	private $comment_index = 0;
+    private $stack         = [];
+    private $declaration   = '';
+    private $tag_value     = '';
+    private $comment       = [];
+    private $comment_index = 0;
 
-	public function __construct($data = array())
-	{
-		switch (gettype($data))
-		{
-			case 'string':
-				$this->xml = ($this->isFile($data) ? file_get_contents($data) : $data);
-				if (!empty($this->xml) && $this->xml[0] == '<')
-				{
-					$this->parse();
-				}
-				break;
+    /**
+     * Converter constructor.
+     *
+     * @param array $data
+     */
+    public function __construct($data = [])
+    {
+        switch (gettype($data)) {
+            case 'string':
+                $this->xml = ($this->isFile($data) ? file_get_contents($data) : $data);
+                if (!empty($this->xml) && $this->xml[0] == '<') {
+                    $this->parse();
+                }
+                break;
 
-			case 'array':
-				$this->data = $data;
-				break;
-		}
-	}
+            case 'array':
+                $this->data = $data;
+                break;
+        }
+    }
 
-	public function __toString()
-	{
-		return (!empty($this->declaration) ? "<?{$this->declaration}?>\n" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n") . $this->traverse($this->data);
-	}
+    /**
+     * @param $data
+     *
+     * @return bool
+     */
+    private function isFile($data)
+    {
+        return file_exists($data);
+    }
 
-	private function traverse($node, $level = 0)
-	{
-		$xml        = '';
-		$attributes = '';
-		$indent     = str_repeat('    ', $level);
+    /**
+     * @throws \ErrorException
+     */
+    private function parse()
+    {
+        $this->stack[] =& $this->data;
+        $stream        = new Stream(trim($this->xml));
 
-		if (!empty($node['#comment']))
-		{
-			foreach ($node['#comment'] as $comment)
-			{
-				$comment = "{$indent}<!-- {$comment} -->";
-				$comment = $this->applyIndentation($comment, $indent);
-				$xml .= "\n" . $comment . "\n";
-			}
-			unset($node['#comment']);
-		}
-		if (count($node) > 1)
-		{
-			foreach ($node as $key => $value)
-			{
-				if ($key[0] != '@')
-				{
-					continue;
-				}
-				$attributes .= ' ' . substr($key, 1);
-				if (!is_bool($value))
-				{
-					$attributes .= '="' . $value . '"';
-				}
-				unset($node[$key]);
-			}
-		}
-		foreach ($node as $tag => $data)
-		{
-			switch (gettype($data))
-			{
-				case 'array':
-					$xml .= "{$indent}<{$tag}{$attributes}>\n";
-					if ($this->isAssoc($data))
-					{
-						$xml .= $this->traverse($data, $level + 1);
-					}
-					else
-					{
-						foreach ($data as $child)
-						{
-							$xml .= $this->traverse($child, $level + 1);
-						}
-					}
-					$xml .= "{$indent}</{$tag}>\n";
-					break;
+        while (!$stream->isEmpty()) {
+            if ($stream->matches('<?')) {
+                $this->handleDeclaration($stream);
+            } elseif ($stream->matches('<!--')) {
+                $this->handleComment($stream);
+            } elseif ($stream->matches('<!doctype', 'i')) {
+                $this->handleDoctype($stream);
+            } elseif ($stream->matches('</')) {
+                $this->handleElementClose($stream);
+            } elseif ($stream->matches('<')) {
+                $this->handleElementOpen($stream);
+            } else {
+                $this->tag_value = $stream->readTo('<');
+            }
+        }
 
-				case 'NULL':
-					$xml .= "{$indent}<{$tag}{$attributes} />\n";
-					break;
+        unset($this->xml);
+    }
 
-				default:
-					$xml .= "{$indent}<{$tag}{$attributes}>{$data}</{$tag}>\n";
-					break;
-			}
-		}
+    /**
+     * @param Stream $stream
+     */
+    private function handleDeclaration(Stream $stream)
+    {
+        // Skip '<?'
+        $stream->next(2);
+        $this->declaration = $stream->readTo('?');
 
-		return $xml;
-	}
+        // Skip '?' . '>'
+        $stream->next(2);
+    }
 
-	private function isAssoc($array)
-	{
-		return count(array_filter(array_keys($array), 'is_string')) > 0;
-	}
+    /**
+     * @param Stream $stream
+     */
+    private function handleComment(Stream $stream)
+    {
+        // Skip '<!--'
+        $stream->next(4);
+        $comment = '';
 
-	private function parse()
-	{
-		$this->stack[] =& $this->data;
-		$stream = new Stream(trim($this->xml));
+        do {
+            $comment .= $stream->next();
+        } while (!$stream->matches('-->'));
 
-		while (!$stream->isEmpty())
-		{
-			if ($stream->matches('<?'))
-			{
-				$this->handleDeclaration($stream);
-			}
-			elseif ($stream->matches('<!--'))
-			{
-				$this->handleComment($stream);
-			}
-			elseif ($stream->matches('<!doctype', 'i'))
-			{
-				$this->handleDoctype($stream);
-			}
-			elseif ($stream->matches('</'))
-			{
-				$this->handleElementClose($stream);
-			}
-			elseif ($stream->matches('<'))
-			{
-				$this->handleElementOpen($stream);
-			}
-			else
-			{
-				$this->tag_value = $stream->readTo('<');
-			}
-		}
+        $this->comment[$this->comment_index++] = trim($comment);
 
-		unset($this->xml);
-	}
+        // Skip '-->'
+        $stream->next(3);
+    }
 
-	private function handleDeclaration(Stream $stream)
-	{
-		// Skip '<?'
-		$stream->next(2);
-		$this->declaration = $stream->readTo('?');
+    /**
+     * @param Stream $stream
+     */
+    private function handleDoctype(Stream $stream)
+    {
+        // Skip '<!doctype'
+        $stream->next(9);
+        $stream->readTo('>');
 
-		// Skip '?' . '>'
-		$stream->next(2);
-	}
+        // Skip '>'
+        $stream->next();
+    }
 
-	private function handleDoctype(Stream $stream)
-	{
-		// Skip '<!doctype'
-		$stream->next(9);
-		$stream->readTo('>');
+    /**
+     * @param Stream $stream
+     *
+     * @throws \ErrorException
+     */
+    private function handleElementClose(Stream $stream)
+    {
+        // Skip '</'
+        $stream->next(2);
+        $element = $stream->readTo('>');
 
-		// Skip '>'
-		$stream->next();
-	}
+        // Skip '>'
+        $stream->next();
+        $this->closeElement($stream, $element);
+    }
 
-	private function handleComment(Stream $stream)
-	{
-		// Skip '<!--'
-		$stream->next(4);
-		$comment = '';
-		do
-		{
-			$comment .= $stream->next();
-		}
-		while (!$stream->matches('-->'));
-		$this->comment[$this->comment_index++] = trim($comment);
+    /**
+     * @param Stream $stream
+     *
+     * @throws \ErrorException
+     */
+    private function handleElementOpen(Stream $stream)
+    {
+        // Skip '<'
+        $stream->next();
+        $element = $stream->readTo('>');
 
-		// Skip '-->'
-		$stream->next(3);
-	}
+        // Skip '>'
+        $stream->next();
 
-	private function handleElementOpen(Stream $stream)
-	{
-		// Skip '<'
-		$stream->next();
-		$element = $stream->readTo('>');
+        $isEmpty = false;
 
-		// Skip '>'
-		$stream->next();
+        if (substr($element, -1) === '/') {
+            $isEmpty = true;
+            $element = substr($element, 0, -1);
+        }
 
-		$isEmpty = false;
-		if (substr($element, -1) == '/')
-		{
-			$isEmpty = true;
-			$element = substr($element, 0, -1);
-		}
+        $tmp      = preg_split('~\s+~', $element, 2);
+        $tag_name = array_shift($tmp);
 
-		$tmp = preg_split('~\s+~', $element, 2);
-		$tag_name = array_shift($tmp);
+        $node            = [];
+        $node[$tag_name] = [];
 
-		$node            = array();
-		$node[$tag_name] = array();
-		if (!empty($this->comment))
-		{
-			$node["#comment"]    = $this->comment;
-			$this->comment       = array();
-			$this->comment_index = 0;
-		}
-		if (!empty($tmp))
-		{
-			preg_match_all('~\s*([^= ]+)(?:=(["\']?)(.*?)\2)?~sm', $tmp[0], $matches, PREG_SET_ORDER);
-			foreach ($matches as $match)
-			{
-				$node["@{$match[1]}"] = count($match) > 2 ? $match[3] : true;
-			}
-		}
+        if (!empty($this->comment)) {
+            $node['#comment'] = $this->comment;
+            $this->comment    = [];
+            $this->comment_index = 0;
+        }
 
-		$current =& $this->stack[count($this->stack) - 1];
-		if (empty($current))
-		{
-			$current       = $node;
-			$this->stack[] =& $current[$tag_name];
-		}
-		else
-		{
-			if ($this->isAssoc($current))
-			{
-				$current = array($current, $node);
-			}
-			else
-			{
-				$current[] = $node;
-			}
-			$this->stack[] =& $current[count($current) - 1][$tag_name];
-		}
+        if (!empty($tmp)) {
+            preg_match_all('~\s*([^= ]+)(?:=(["\']?)(.*?)\2)?~sm', $tmp[0], $matches, PREG_SET_ORDER);
 
-		if ($isEmpty)
-		{
-			$this->closeElement($stream, $tag_name);
-		}
-	}
+            foreach ($matches as $match) {
+                $node["@{$match[1]}"] = count($match) > 2 ? $match[3] : true;
+            }
+        }
 
-	private function handleElementClose(Stream $stream)
-	{
-		// Skip '</'
-		$stream->next(2);
-		$element = $stream->readTo('>');
+        $current =& $this->stack[count($this->stack) - 1];
 
-		// Skip '>'
-		$stream->next();
-		$this->closeElement($stream, $element);
-	}
+        if (empty($current)) {
+            $current       = $node;
+            $this->stack[] =& $current[$tag_name];
+        } else {
+            if ($this->isAssoc($current)) {
+                $current = [$current, $node];
+            } else {
+                $current[] = $node;
+            }
 
-	private function closeElement(Stream $stream, $tag_name)
-	{
-		$child =& $this->stack[count($this->stack) - 1];
-		array_pop($this->stack);
+            $this->stack[] =& $current[count($current) - 1][$tag_name];
+        }
 
-		$last = count($this->stack) - 1;
-		if (isset($this->stack[$last][$tag_name]) || isset(end($this->stack[$last])[$tag_name]))
-		{
-			if (empty($child))
-			{
-				$this->tag_value = trim($this->tag_value);
-				$child           = strlen($this->tag_value) > 0 ? $this->tag_value : null;
-			}
-			$this->tag_value = '';
-		}
-		else
-		{
-			throw new \ErrorException("Syntax error in XML data. Please check line # {$stream->line()}.");
-		}
-	}
+        if ($isEmpty) {
+            $this->closeElement($stream, $tag_name);
+        }
+    }
 
-	// ### Iterator: foreach access ###
+    /**
+     * @param Stream $stream
+     * @param        $tag_name
+     *
+     * @throws \ErrorException
+     */
+    private function closeElement(Stream $stream, $tag_name)
+    {
+        $child =& $this->stack[count($this->stack) - 1];
+        array_pop($this->stack);
 
-	public function rewind()
-	{
-		reset($this->data);
-	}
+        $last = count($this->stack) - 1;
 
-	public function current()
-	{
-		return current($this->data);
-	}
+        if (isset($this->stack[$last][$tag_name]) || isset(end($this->stack[$last])[$tag_name])) {
+            if (empty($child)) {
+                $this->tag_value = trim($this->tag_value);
+                $child           = strlen($this->tag_value) > 0 ? $this->tag_value : null;
+            }
 
-	public function key()
-	{
-		return key($this->data);
-	}
+            $this->tag_value = '';
+        } else {
+            throw new \ErrorException("Syntax error in XML data. Please check line # {$stream->line()}.");
+        }
+    }
 
-	public function next()
-	{
-		return next($this->data);
-	}
+    /**
+     * @param $array
+     *
+     * @return bool
+     */
+    private function isAssoc($array)
+    {
+        return count(array_filter(array_keys($array), 'is_string')) > 0;
+    }
 
-	public function valid()
-	{
-		$key = key($this->data);
+    /**
+     * @return string
+     */
+    public function __toString()
+    {
+        return (!empty($this->declaration) ? "<?{$this->declaration}?>\n" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n") . $this->traverse($this->data);
+    }
 
-		return ($key !== null && $key !== false);
-	}
+    // ### Iterator: foreach access ###
 
-	// ### ArrayAccess: key/value access ###
+    /**
+     * @param     $node
+     * @param int $level
+     *
+     * @return string
+     */
+    private function traverse($node, $level = 0)
+    {
+        $xml        = '';
+        $attributes = '';
+        $indent     = str_repeat('    ', $level);
 
-	public function offsetSet($offset, $value)
-	{
-		if (is_null($offset))
-		{
-			$this->data[] = $value;
-		}
-		else
-		{
-			$this->data[$offset] = $value;
-		}
-	}
+        if (!empty($node['#comment'])) {
+            foreach ($node['#comment'] as $comment) {
+                $comment = "{$indent}<!-- {$comment} -->";
+                $comment = $this->applyIndentation($comment, $indent);
+                $xml     .= "\n" . $comment . "\n";
+            }
+            unset($node['#comment']);
+        }
 
-	public function offsetExists($offset)
-	{
-		return isset($this->data[$offset]);
-	}
+        if (count($node) > 1) {
+            foreach ($node as $key => $value) {
+                if ($key[0] !== '@') {
+                    continue;
+                }
 
-	public function offsetUnset($offset)
-	{
-		unset($this->data[$offset]);
-	}
+                $attributes .= ' ' . substr($key, 1);
 
-	public function offsetGet($offset)
-	{
-		return isset($this->data[$offset]) ? $this->data[$offset] : null;
-	}
+                if (!is_bool($value)) {
+                    $attributes .= '="' . $value . '"';
+                }
 
-	public function version()
-	{
-		return preg_match('#version\="(.*)"#U', $this->declaration, $match) ? $match[1] : '1.0';
-	}
+                unset($node[$key]);
+            }
+        }
 
-	public function encoding()
-	{
-		return preg_match('#encoding\="(.*)"#U', $this->declaration, $match) ? $match[1] : 'utf-8';
-	}
+        foreach ($node as $tag => $data) {
+            switch (gettype($data)) {
+                case 'array':
+                    $xml .= "{$indent}<{$tag}{$attributes}>\n";
 
-	/**
-	 * @param $data
-	 *
-	 * @return bool
-	 */
-	private function isFile($data)
-	{
-		return file_exists($data);
-	}
+                    if ($this->isAssoc($data)) {
+                        $xml .= $this->traverse($data, $level + 1);
+                    } else {
+                        foreach ($data as $child) {
+                            $xml .= $this->traverse($child, $level + 1);
+                        }
+                    }
 
-	/**
-	 * @param $text
-	 * @param $indent
-	 *
-	 * @return mixed
-	 */
-	private function applyIndentation($text, $indent)
-	{
-		return preg_replace('~\s*\n\s*~', "\n{$indent}", $text);
-	}
+                    $xml .= "{$indent}</{$tag}>\n";
+
+                    break;
+
+                case 'NULL':
+                    $xml .= "{$indent}<{$tag}{$attributes} />\n";
+
+                    break;
+
+                default:
+                    $xml .= "{$indent}<{$tag}{$attributes}>{$data}</{$tag}>\n";
+
+                    break;
+            }
+        }
+
+        return $xml;
+    }
+
+    /**
+     * @param $text
+     * @param $indent
+     *
+     * @return mixed
+     */
+    private function applyIndentation($text, $indent)
+    {
+        return preg_replace('~\s*\n\s*~', "\n{$indent}", $text);
+    }
+
+    /**
+     *
+     */
+    public function rewind()
+    {
+        reset($this->data);
+    }
+
+    /**
+     * @return mixed
+     */
+    public function current()
+    {
+        return current($this->data);
+    }
+
+    /**
+     * @return bool|float|int|string|null
+     */
+    public function key()
+    {
+        return key($this->data);
+    }
+
+    // ### ArrayAccess: key/value access ###
+
+    /**
+     * @return mixed|void
+     */
+    public function next()
+    {
+        return next($this->data);
+    }
+
+    /**
+     * @return bool
+     */
+    public function valid()
+    {
+        $key = key($this->data);
+
+        return ($key !== null && $key !== false);
+    }
+
+    /**
+     * @param mixed $offset
+     * @param mixed $value
+     */
+    public function offsetSet($offset, $value)
+    {
+        if ($offset === null) {
+            $this->data[] = $value;
+        } else {
+            $this->data[$offset] = $value;
+        }
+    }
+
+    /**
+     * @param mixed $offset
+     *
+     * @return bool
+     */
+    public function offsetExists($offset)
+    {
+        return isset($this->data[$offset]);
+    }
+
+    /**
+     * @param mixed $offset
+     */
+    public function offsetUnset($offset)
+    {
+        unset($this->data[$offset]);
+    }
+
+    /**
+     * @param mixed $offset
+     *
+     * @return mixed|null
+     */
+    public function offsetGet($offset)
+    {
+        return $this->data[$offset] ?? null;
+    }
+
+    /**
+     * @return mixed|string
+     */
+    public function version()
+    {
+        return preg_match('#version="(.*)"#U', $this->declaration, $match) ? $match[1] : '1.0';
+    }
+
+    /**
+     * @return mixed|string
+     */
+    public function encoding()
+    {
+        return preg_match('#encoding="(.*)"#U', $this->declaration, $match) ? $match[1] : 'utf-8';
+    }
 }

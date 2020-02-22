@@ -20,7 +20,7 @@ about speed.
 
 ## Requirements
 
-PHP 5.4+
+PHP 7.2+
 
 ## Installation
 
@@ -30,15 +30,19 @@ Simply add a dependency on `greencape/xml-converter` to your project's `composer
 [Composer](http://getcomposer.org/) to manage the dependencies of your project. Here is a minimal example of a
 `composer.json` file that just defines a dependency on XML Converter:
 
-    {
-        "require": {
-            "greencape/xml-converter": "*@dev"
-        }
+```json
+{
+    "require": {
+        "greencape/xml-converter": "*@dev"
     }
+}
+```
 
 For a system-wide installation via Composer, you can run:
 
-    composer global require 'greencape/xml-converter=*'
+```bash
+$ composer global require 'greencape/xml-converter=*'
+```
 
 Make sure you have `~/.composer/vendor/bin/` in your path.
 
@@ -56,8 +60,6 @@ $xml = new \GreenCape\Xml\Converter('<?xml version="1.0" encoding="ISO-8859-1"?>
 	</food>
 </breakfast_menu>');
 var_dump($xml->data);
-
-?>
 ```
 
 ### XML File to PHP Array
@@ -66,8 +68,6 @@ var_dump($xml->data);
 <?php
 $xml = new \GreenCape\Xml\Converter('some_xml_file.xml');
 var_dump($xml->data);
-
-?>
 ```
 
 ### PHP Array to XML String
@@ -75,15 +75,13 @@ var_dump($xml->data);
 ```php
 <?php
 $xml = new \GreenCape\Xml\Converter(array(
-	'breakfast_menu' => array(
-		array(
-			'food' => array(
-				'name' => 'Waffles'
-			)
-		)
-	)
+    'breakfast_menu' => array(
+        array(
+            'food' => array(
+                'name' => 'Waffles'
+            )
+        )
+    )
 ));
 echo $xml;
-
-?>
 ```

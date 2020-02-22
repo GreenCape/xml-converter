@@ -6,3 +6,5 @@ composer.phar
 vendor
 /build/logs/
 /gource.mp4
+/build/report/
+/.phpunit.result.cache
