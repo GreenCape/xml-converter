@@ -4,3 +4,5 @@ build/*.tgz
 cache.properties
 composer.phar
 vendor
+/build/logs/
+/gource.mp4
