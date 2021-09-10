@@ -41,27 +41,33 @@ namespace GreenCape\Xml;
  */
 class Converter implements \Iterator, \ArrayAccess
 {
-    public $xml = '';
+    public  $xml           = '';
 
-    public $data = [];
+    public  $data          = [];
 
     private $stack         = [];
+
     private $declaration   = '';
+
     private $tag_value     = '';
+
     private $comment       = [];
+
     private $comment_index = 0;
 
     /**
      * Converter constructor.
      *
-     * @param array $data
+     * @param  mixed  $data  Either an XML string, the name of an XML file or a PHP array
+     *
+     * @throws \ErrorException
      */
     public function __construct($data = [])
     {
         switch (gettype($data)) {
             case 'string':
                 $this->xml = ($this->isFile($data) ? file_get_contents($data) : $data);
-                if (!empty($this->xml) && $this->xml[0] == '<') {
+                if (!empty($this->xml) && $this->xml[0] === '<') {
                     $this->parse();
                 }
                 break;
@@ -77,15 +83,17 @@ class Converter implements \Iterator, \ArrayAccess
      *
      * @return bool
      */
-    private function isFile($data)
+    private function isFile($data): bool
     {
         return file_exists($data);
     }
 
     /**
+     * Parse XML into array
+     *
      * @throws \ErrorException
      */
-    private function parse()
+    private function parse(): void
     {
         $this->stack[] =& $this->data;
         $stream        = new Stream(trim($this->xml));
@@ -99,6 +107,8 @@ class Converter implements \Iterator, \ArrayAccess
                 $this->handleDoctype($stream);
             } elseif ($stream->matches('</')) {
                 $this->handleElementClose($stream);
+            } elseif ($stream->matches('<![CDATA[')) {
+                $this->handleCDataOpen($stream);
             } elseif ($stream->matches('<')) {
                 $this->handleElementOpen($stream);
             } else {
@@ -110,9 +120,9 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param Stream $stream
+     * @param  Stream  $stream
      */
-    private function handleDeclaration(Stream $stream)
+    private function handleDeclaration(Stream $stream): void
     {
         // Skip '<?'
         $stream->next(2);
@@ -123,9 +133,9 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param Stream $stream
+     * @param  Stream  $stream
      */
-    private function handleComment(Stream $stream)
+    private function handleComment(Stream $stream): void
     {
         // Skip '<!--'
         $stream->next(4);
@@ -142,9 +152,9 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param Stream $stream
+     * @param  Stream  $stream
      */
-    private function handleDoctype(Stream $stream)
+    private function handleDoctype(Stream $stream): void
     {
         // Skip '<!doctype'
         $stream->next(9);
@@ -155,11 +165,11 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param Stream $stream
+     * @param  Stream  $stream
      *
      * @throws \ErrorException
      */
-    private function handleElementClose(Stream $stream)
+    private function handleElementClose(Stream $stream): void
     {
         // Skip '</'
         $stream->next(2);
@@ -171,11 +181,11 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param Stream $stream
+     * @param  Stream  $stream
      *
      * @throws \ErrorException
      */
-    private function handleElementOpen(Stream $stream)
+    private function handleElementOpen(Stream $stream): void
     {
         // Skip '<'
         $stream->next();
@@ -194,22 +204,7 @@ class Converter implements \Iterator, \ArrayAccess
         $tmp      = preg_split('~\s+~', $element, 2);
         $tag_name = array_shift($tmp);
 
-        $node            = [];
-        $node[$tag_name] = [];
-
-        if (!empty($this->comment)) {
-            $node['#comment'] = $this->comment;
-            $this->comment    = [];
-            $this->comment_index = 0;
-        }
-
-        if (!empty($tmp)) {
-            preg_match_all('~\s*([^= ]+)(?:=(["\']?)(.*?)\2)?~sm', $tmp[0], $matches, PREG_SET_ORDER);
-
-            foreach ($matches as $match) {
-                $node["@{$match[1]}"] = count($match) > 2 ? $match[3] : true;
-            }
-        }
+        $node = $this->createNodeWithAttributes($tag_name, array_shift($tmp));
 
         $current =& $this->stack[count($this->stack) - 1];
 
@@ -218,7 +213,10 @@ class Converter implements \Iterator, \ArrayAccess
             $this->stack[] =& $current[$tag_name];
         } else {
             if ($this->isAssoc($current)) {
-                $current = [$current, $node];
+                $current = [
+                    $current,
+                    $node,
+                ];
             } else {
                 $current[] = $node;
             }
@@ -231,13 +229,26 @@ class Converter implements \Iterator, \ArrayAccess
         }
     }
 
+    private function handleCDataOpen(Stream $stream): void
+    {
+        // Skip '<![CDATA['
+        $stream->next(9);
+
+        while (!$stream->matches(']]>')) {
+            $this->tag_value .= $stream->next();
+        }
+
+        // Skip ']]>'
+        $stream->next(3);
+    }
+
     /**
-     * @param Stream $stream
-     * @param        $tag_name
+     * @param  Stream  $stream
+     * @param          $tag_name
      *
      * @throws \ErrorException
      */
-    private function closeElement(Stream $stream, $tag_name)
+    private function closeElement(Stream $stream, $tag_name): void
     {
         $child =& $this->stack[count($this->stack) - 1];
         array_pop($this->stack);
@@ -247,12 +258,14 @@ class Converter implements \Iterator, \ArrayAccess
         if (isset($this->stack[$last][$tag_name]) || isset(end($this->stack[$last])[$tag_name])) {
             if (empty($child)) {
                 $this->tag_value = trim($this->tag_value);
-                $child           = strlen($this->tag_value) > 0 ? $this->tag_value : null;
+                $child           = $this->tag_value !== '' ? $this->tag_value : null;
             }
 
             $this->tag_value = '';
         } else {
-            throw new \ErrorException("Syntax error in XML data. Please check line # {$stream->line()}.");
+            throw new \ErrorException(
+                "Syntax error in XML data. Please check line # {$stream->line()} near '{$stream->next(10)}'."
+            );
         }
     }
 
@@ -261,7 +274,7 @@ class Converter implements \Iterator, \ArrayAccess
      *
      * @return bool
      */
-    private function isAssoc($array)
+    private function isAssoc($array): bool
     {
         return count(array_filter(array_keys($array), 'is_string')) > 0;
     }
@@ -271,18 +284,19 @@ class Converter implements \Iterator, \ArrayAccess
      */
     public function __toString()
     {
-        return (!empty($this->declaration) ? "<?{$this->declaration}?>\n" : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n") . $this->traverse($this->data);
+        return (!empty($this->declaration) ? "<?{$this->declaration}?>\n"
+                : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n") . $this->traverse($this->data);
     }
 
     // ### Iterator: foreach access ###
 
     /**
-     * @param     $node
-     * @param int $level
+     * @param       $node
+     * @param  int  $level
      *
      * @return string
      */
-    private function traverse($node, $level = 0)
+    private function traverse($node, int $level = 0): string
     {
         $xml        = '';
         $attributes = '';
@@ -336,7 +350,8 @@ class Converter implements \Iterator, \ArrayAccess
                     break;
 
                 default:
-                    $xml .= "{$indent}<{$tag}{$attributes}>{$data}</{$tag}>\n";
+                    $data = htmlspecialchars($data, ENT_XML1);
+                    $xml  .= "{$indent}<{$tag}{$attributes}>{$data}</{$tag}>\n";
 
                     break;
             }
@@ -349,7 +364,7 @@ class Converter implements \Iterator, \ArrayAccess
      * @param $text
      * @param $indent
      *
-     * @return mixed
+     * @return array|string|string[]|null
      */
     private function applyIndentation($text, $indent)
     {
@@ -373,7 +388,7 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @return bool|float|int|string|null
+     * @return float|int|string|null
      */
     public function key()
     {
@@ -393,16 +408,16 @@ class Converter implements \Iterator, \ArrayAccess
     /**
      * @return bool
      */
-    public function valid()
+    public function valid(): bool
     {
         $key = key($this->data);
 
-        return ($key !== null && $key !== false);
+        return ($key !== null);
     }
 
     /**
-     * @param mixed $offset
-     * @param mixed $value
+     * @param  mixed  $offset
+     * @param  mixed  $value
      */
     public function offsetSet($offset, $value)
     {
@@ -414,9 +429,10 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param mixed $offset
+     * @param  mixed  $offset
      *
      * @return bool
+     * @noinspection PhpMissingReturnTypeInspection
      */
     public function offsetExists($offset)
     {
@@ -424,7 +440,7 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param mixed $offset
+     * @param  mixed  $offset
      */
     public function offsetUnset($offset)
     {
@@ -432,7 +448,7 @@ class Converter implements \Iterator, \ArrayAccess
     }
 
     /**
-     * @param mixed $offset
+     * @param  mixed  $offset
      *
      * @return mixed|null
      */
@@ -455,5 +471,33 @@ class Converter implements \Iterator, \ArrayAccess
     public function encoding()
     {
         return preg_match('#encoding="(.*)"#U', $this->declaration, $match) ? $match[1] : 'utf-8';
+    }
+
+    /**
+     * @param $elementTag
+     * @param $attributeString
+     *
+     * @return array The node
+     */
+    private function createNodeWithAttributes($elementTag, $attributeString): array
+    {
+        $node              = [];
+        $node[$elementTag] = [];
+
+        if (!empty($this->comment)) {
+            $node['#comment']    = $this->comment;
+            $this->comment       = [];
+            $this->comment_index = 0;
+        }
+
+        if (!empty($attributeString)) {
+            preg_match_all('~\s*([^= ]+)(?:=(["\']?)(.*?)\2)?~sm', $attributeString, $matches, PREG_SET_ORDER);
+
+            foreach ($matches as $match) {
+                $node["@{$match[1]}"] = count($match) > 2 ? $match[3] : true;
+            }
+        }
+
+        return $node;
     }
 }

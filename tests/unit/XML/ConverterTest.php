@@ -35,39 +35,15 @@ use PHPUnit\Framework\TestCase;
 
 class ConverterTest extends TestCase
 {
-    private $xmlFile;
-    private $phpArray;
-
-    public function __construct($name = null, array $data = [], $dataName = '')
-    {
-        parent::__construct($name, $data, $dataName);
-
-        $this->xmlFile  = __DIR__ . '/../../data/breakfast.xml';
-        $this->phpArray = [
-            'breakfast_menu' => [
-                'food' => [
-                    'name'  => 'Waffles',
-                    '@lang' => 'en',
-                ],
+    private $xmlFile = __DIR__ . '/../../data/breakfast.xml';
+    private $phpArray = [
+        'breakfast_menu' => [
+            'food' => [
+                'name'  => 'Waffles',
+                '@lang' => 'en',
             ],
-        ];
-    }
-
-    /**
-     * Sets up the fixture, for example, opens a network connection.
-     * This method is called before a test is executed.
-     */
-    protected function setUp(): void
-    {
-    }
-
-    /**
-     * Tears down the fixture, for example, closes a network connection.
-     * This method is called after a test is executed.
-     */
-    protected function tearDown(): void
-    {
-    }
+        ],
+    ];
 
     public function testXmlFileToPhpArray(): void
     {
@@ -102,6 +78,10 @@ class ConverterTest extends TestCase
             'tabs'           => [
                 'xml' => '<?xml version="1.0"?><root><node	foo="bar">foobar</node></root>',
                 'php' => ['root' => ['node' => 'foobar', '@foo' => 'bar']],
+            ],
+            'cdata'           => [
+                'xml' => '<?xml version="1.0"?><root><node><![CDATA[<salutation>Hello World!</salutation>]]></node></root>',
+                'php' => ['root' => ['node' => '<salutation>Hello World!</salutation>']],
             ],
         ];
     }
@@ -149,9 +129,9 @@ class ConverterTest extends TestCase
     /**
      * @dataProvider provideManifests
      *
-     * @param string $file
+     * @param  string  $file
      */
-    public function testManifest($file): void
+    public function testManifest(string $file): void
     {
         $xml = new Converter($file);
 
