@@ -85,7 +85,7 @@ class Converter implements \Iterator, \ArrayAccess
      */
     private function isFile($data): bool
     {
-        return file_exists($data);
+        return strlen($data) <= PHP_MAXPATHLEN && file_exists($data);
     }
 
     /**
